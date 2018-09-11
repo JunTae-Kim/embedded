@@ -34,11 +34,11 @@ int lkas(int upP_x, int leftP_x, int rightP_x, int flag)
 {
     if ((leftP_x > -70) && flag != 2)
     {
-        upP_x += 3 * (leftP_x + 70);
+        upP_x += 2 * (leftP_x + 70);
     }
     if (rightP_x < 390 && flag != 1)
     {
-        upP_x += 3 * (rightP_x - 390);
+        upP_x += 2 * (rightP_x - 390);
     }
 
     return upP_x;
@@ -186,9 +186,9 @@ void OpenCV_canny_edge_image(char* file, unsigned char* outBuf, int nw, int nh)
              nh : height value of destination buffer
   * @retval none
   */
-int OpenCV_hough_transform(unsigned char* srcBuf, int iw, int ih, unsigned char* outBuf, int nw, int nh, float be_angle)
+int OpenCV_hough_transform(unsigned char* srcBuf, int iw, int ih, unsigned char* outBuf, int nw, int nh, float be_angle, int threshold, int Low_T, int HIGH_T, int roi_th, int ignoreL)
 {
-    int left_cnt = 0, right_cnt = 0;
+    int left_cnt = 0, right_cnt = 0, stop_cnt = 0;
     float rho1 = 0, rho2 = 0, theta1 = 0, theta2 = 0;
     float angle = 0;
     int length = 800;
@@ -209,16 +209,48 @@ int OpenCV_hough_transform(unsigned char* srcBuf, int iw, int ih, unsigned char*
     Scalar lineColor3 = cv::Scalar(0,0,0);
     
     Mat dstRGB(nh, nw, CV_8UC3, outBuf);
-    
     Mat srcRGB(ih, iw, CV_8UC3, srcBuf);
     Mat resRGB(ih, iw, CV_8UC3);
     //cvtColor(srcRGB, srcRGB, CV_BGR2BGRA);
 
     // ĳ�� �˰��� ����
-    cv::Mat contours;
-    cv::Canny(srcRGB, contours, 300, 350);
+    cv::Mat contours, srcGRAY;
+    
+/*
+    if (ignoreL != 0)
+    {
+        cvtColor(srcRGB, srcGRAY, CV_BGR2GRAY);
 
-    for (int ii = 0; ii<80; ii++)
+        for (int ii = 0; ii<180; ii++)
+        {   
+            for (int jj = 0; jj<320; jj++)
+            {
+                if (ii >= 0 && ii < roi_th)
+                {
+                    srcGRAY.at<uchar>(ii,jj) = 0;
+                }
+                else
+                {
+                    if (srcGRAY.at<uchar>(ii,jj) > 100)
+                    {
+                        srcGRAY.at<uchar>(ii,jj) = 255;
+                    }
+                    else srcGRAY.at<uchar>(ii,jj) = 0;
+                }
+            }
+        }
+        //cv::Canny(srcGRAY, contours, Low_T, HIGH_T);     //125, 300
+
+        cv::Canny(srcGRAY, // �׷��̷��� ����
+            contours, // ��� �ܰ���
+            125,  // ���� ��谪
+            350);  // ���� ��谪
+    }
+*/
+
+    cv::Canny(srcRGB, contours, Low_T, HIGH_T);     //125, 300
+
+    for (int ii = 0; ii<roi_th; ii++)       //70
     {
         for (int jj = 0; jj < 320; jj++)
         {
@@ -227,11 +259,11 @@ int OpenCV_hough_transform(unsigned char* srcBuf, int iw, int ih, unsigned char*
             contours.at<Vec3b>(ii,jj)[2] = 0;
         }
     }
-    
+
     // �� ���� ���� ���� ��ȯ
     std::vector<cv::Vec2f> lines;
     cv::HoughLines(contours, lines, 1, PI/180, // �ܰ躰 ũ�� (1�� ��/180���� �ܰ躰�� ������ ��� ������ �������� ���� ã��)
-        20);  // ��ǥ(vote) �ִ� ����
+        threshold);  // ��ǥ(vote) �ִ� ����
 
     // �� �׸���
     cv::Mat result(contours.rows, contours.cols, CV_8UC3, lineColor);
@@ -244,7 +276,8 @@ int OpenCV_hough_transform(unsigned char* srcBuf, int iw, int ih, unsigned char*
         float rho = (*it)[0];   // ù ��° ��Ҵ� rho �Ÿ�
         float theta = (*it)[1]; // �� ��° ��Ҵ� ��Ÿ ����
         
-        if (theta < 1.41 && theta >= 0) // ���� ��
+        if (theta < 1.41 && theta >= 0 && ignoreL != 1) // ���� ��
+//        if (theta < 1.41 && theta >= 0) // ���� ��
         {
             //cv::Point pt1(rho/cos(theta), 0); // ù �࿡�� �ش� ���� ������   
             //cv::Point pt2((rho-result.rows*sin(theta))/cos(theta), result.rows);
@@ -257,7 +290,8 @@ int OpenCV_hough_transform(unsigned char* srcBuf, int iw, int ih, unsigned char*
             //cv::line(srcRGB, pt1, pt2, lineColor1, 1); // �Ͼ� ������ �׸���
 
         } 
-        else if (theta<3.14 && theta>=1.77)
+        else if (theta<3.14 && theta>=1.77 && ignoreL != 2)
+//        else if (theta<3.14 && theta>=1.77)
         {
             rho2 += rho;
             theta2 += theta;
@@ -268,10 +302,24 @@ int OpenCV_hough_transform(unsigned char* srcBuf, int iw, int ih, unsigned char*
             //cv::line(srcRGB, pt3, pt4, lineColor2, 1); // �Ͼ� ������ �׸���
         }
         //printf("line: rho=%f, theta=%f\n", rho, theta);
+/*
+        if (left_cnt == 0 && ignoreL == 2)
+        {
+            stop_cnt = 1;
+            angle = 1;
+            //left turn
+        }
+        else if (right_cnt == 0 && ignoreL == 1)
+        {
+            stop_cnt = 1;
+            angle = 1;
+            //right turn
+        }
+*/
         ++it;
     }
 
-    if (left_cnt >= 5)
+    if (left_cnt >= 3)
     {
         rho1 = rho1 / left_cnt;
         theta1 = theta1 / left_cnt;
@@ -284,7 +332,7 @@ int OpenCV_hough_transform(unsigned char* srcBuf, int iw, int ih, unsigned char*
         pt2.x = cvRound(x1 + length * (-b1));
         pt2.y = cvRound(y1 + length * (a1));
     }
-    if (right_cnt >= 5)
+    if (right_cnt >= 3)
     {
         rho2 = rho2 / right_cnt;
         theta2 = theta2 / right_cnt;
@@ -364,7 +412,10 @@ int OpenCV_hough_transform(unsigned char* srcBuf, int iw, int ih, unsigned char*
 		tempPt.y = (int)(HEIGHT / 2 + offset);
 		tempPt.x = (int)(((float)(banishP.x-downPt.x)/(float)(banishP.y - downPt.y))*(float)(tempPt.y - downPt.y)+(float)downPt.x);
 
-		angle = atan((float)(tempPt.x - downPt.x)/(float)(downPt.y - tempPt.y)) * 57.3;
+        if (stop_cnt != 1)
+        {
+    		angle = atan((float)(tempPt.x - downPt.x)/(float)(downPt.y - tempPt.y)) * 57.3;
+        }
 /*
         printf("banishP.x : %d\t banishP.y : %d\n", banishP.x, banishP.y);
         printf("tempPt.x : %d\t tempPt.y : %d\n", tempPt.x, tempPt.y);
@@ -404,7 +455,10 @@ int OpenCV_hough_transform(unsigned char* srcBuf, int iw, int ih, unsigned char*
 		tempPt.y = (int)(HEIGHT / 2 + offset);
 		tempPt.x = (int)(((float)(upPt.x-downPt.x)/(float)(upPt.y - downPt.y))*(float)(tempPt.y - downPt.y)+(float)downPt.x);
 
-        angle = atan((float)(tempPt.x - downPt.x)/(float)(downPt.y - tempPt.y)) * 57.3;
+        if (stop_cnt != 1)
+        {
+            angle = atan((float)(tempPt.x - downPt.x)/(float)(downPt.y - tempPt.y)) * 57.3;
+        }
         //angle /= 2.0;
         //if (angle > 20)
         //{
@@ -442,7 +496,10 @@ int OpenCV_hough_transform(unsigned char* srcBuf, int iw, int ih, unsigned char*
 		tempPt.y = (int)(HEIGHT / 2 + offset);
 		tempPt.x = (int)(((float)(upPt.x-downPt.x)/(float)(upPt.y - downPt.y))*(float)(tempPt.y - downPt.y)+(float)downPt.x);
 
-        angle = atan((float)(tempPt.x - downPt.x)/(float)(downPt.y - tempPt.y)) * 57.3;
+        if (stop_cnt != 1)
+        {
+            angle = atan((float)(tempPt.x - downPt.x)/(float)(downPt.y - tempPt.y)) * 57.3;
+        }
         
         //angle /= 2.0;
         //if (angle < -20)
@@ -461,23 +518,103 @@ int OpenCV_hough_transform(unsigned char* srcBuf, int iw, int ih, unsigned char*
 
     cv::resize(srcRGB, dstRGB, cv::Size(nw, nh), 0, 0, CV_INTER_LINEAR);
 
+    //printf("stop_cnt : %d \t angle : %f\n", stop_cnt, angle);
+
     return angle;
+
+/*
+    if (ignoreL == 0)
+    {
+        return angle;
+    }
+    else if (ignoreL == 1)
+    {
+        return angle - 10.0;
+    }
+    else if (ignoreL == 2)
+    {
+        return angle + 10.0;
+    }
+*/
+}
+
+int opencv_obstacle(unsigned char* srcBuf, int iw, int ih, unsigned char* outBuf, int nw, int nh, int step)
+{
+    int idx1 = 0;
+    int area1 = 3;
+    int area1_num = -1;
+	int LowH1 = 170, HighH1 = 179;			//red
+	int LowS = 50, HighS = 255;
+	int LowV = 30, HighV = 255;
+
+    int detect_step = 0;
+    detect_step = step;
+
+    Mat srcRGB(ih, iw, CV_8UC3, srcBuf);
+    Mat hsvimg(ih, iw, CV_8UC3);
+    Mat dstRGB(nh, nw, CV_8UC3, outBuf);
+
+	Mat img_binary1;
+
+    int element_shape = MORPH_RECT;
+	Mat element = getStructuringElement(element_shape, Size(5,5));
+
+    cvtColor(srcRGB, hsvimg, CV_BGR2HSV);		//transform hsv color space
+
+	inRange(hsvimg, Scalar(LowH1,LowS,LowV), Scalar(HighH1, HighS, HighV), img_binary1);
+	morphologyEx(img_binary1, img_binary1, MORPH_CLOSE, element);
+    vector<vector<Point> > contour1;
+    vector<Vec4i> hierarchy1;
+
+    findContours(img_binary1, contour1, hierarchy1, CV_RETR_CCOMP, CV_CHAIN_APPROX_SIMPLE);
+
+    if(!contour1.empty() && !hierarchy1.empty())
+    {
+        // iterate through all the top-level contours,
+        // draw each connected component with its own random color
+        for( ; idx1 >= 0; idx1 = hierarchy1[idx1][0] )
+        {
+            if (contour1[idx1].size() > area1)
+            {
+                area1 = contour1[idx1].size();
+                area1_num = idx1;
+            }
+        }
+        cout << contour1[area1_num].size() << endl;
+        Scalar color( 0, 0, 255 );
+
+        if (area1_num != -1 && area1 >= 30)
+        {
+            drawContours( srcRGB, contour1, area1_num, color, CV_FILLED, 8, hierarchy1 );
+            putText(srcRGB, "obstacle : STOP!", Point(WIDTH/2-40, HEIGHT - 10), 1, 1, Scalar(255,255,255));
+            detect_step++;
+        }
+        else detect_step = 0;
+    }
+
+    cv::resize(srcRGB, dstRGB, cv::Size(nw, nh), 0, 0, CV_INTER_LINEAR);
+    return detect_step;
 }
 
 int colordetect(unsigned char* srcBuf, int iw, int ih, unsigned char* outBuf, int nw, int nh, int step)
 {
-    int max1 = 500, max2 = 500, max3 = 500;
-    int idx1 = 0, idx2 = 0, idx3 = 0;
-    int area1 = 3, area2 = 3, area3 = 3;
-    int area1_num = -1, area2_num = -1, area3_num = -1;
+    int idx1 = 0;
+    //int idx2 = 0;
+    int idx3 = 0;
+
+    int area1 = 3;
+    //int area2 = 3
+    int area3 = 3;
+
+    int area1_num = -1;
+    //int area2_num = -1;
+    int area3_num = -1;
 
 	int LowH1 = 170, HighH1 = 179;			//red
 	//int LowH2 = 24, HighH2 = 33;			//yellow
 	int LowH3 = 65, HighH3 = 85;			//green
 	int LowS = 50, HighS = 255;
 	int LowV = 30, HighV = 255;
-
-	int traffic_threshold = 500;
 
     int color_step = 0;
     color_step = step;
@@ -486,8 +623,6 @@ int colordetect(unsigned char* srcBuf, int iw, int ih, unsigned char* outBuf, in
     Mat hsvimg(ih, iw, CV_8UC3);
     Mat dstRGB(nh, nw, CV_8UC3, outBuf);
 
-
-	Mat dst;
 	Mat img_binary1, img_binary2, img_binary3;
 
 	int element_shape = MORPH_RECT;
@@ -530,7 +665,7 @@ int colordetect(unsigned char* srcBuf, int iw, int ih, unsigned char* outBuf, in
             cout << contour1[area1_num].size() << endl;
             Scalar color( 0, 0, 255 );
 
-            if (area1_num != -1)
+            if (area1_num != -1 && area1 >= 20)
             {
                 drawContours( srcRGB, contour1, area1_num, color, CV_FILLED, 8, hierarchy1 );
                 putText(srcRGB, "Red : STOP!", Point(WIDTH/2-40, HEIGHT - 10), 1, 1, Scalar(255,255,255));
@@ -584,20 +719,24 @@ int colordetect(unsigned char* srcBuf, int iw, int ih, unsigned char* outBuf, in
             Scalar color( 0, 0, 255 );
             drawContours( srcRGB, contour3, area3_num, color, CV_FILLED, 8, hierarchy3 );
 
-            if (area3 >= 10 && area3 <= 20 && (color_step % 2 == 1))
+            if (area3 >= 8 && area3 <= 25 && (color_step % 2 == 1))
             {
                 color_step = color_step + 2;
+            }
+            else if (area3 >= 8 && area3 <= 25 && color_step == 2)
+            {
+                color_step = 1;
             }
             else if ((color_step % 2 == 1))
             {
                 color_step = 1;
             }
 
-            if (area3 > 20 && (color_step % 2 == 1))
+            if (area3 > 25 && (color_step % 2 == 1))
             {
                 color_step = 2;
             }
-            else if (area3 > 20)
+            else if (area3 > 25)
             {
                 color_step = color_step + 2;
             }

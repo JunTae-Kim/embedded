@@ -51,8 +51,24 @@
 int af_angle;
 int be_angle;
 
-int step_cnt = 0;
+int speed = 180;
+int step_cnt = 1;
 int stop = 0;
+int steering_stop = 0;
+int passing = 5;
+int down_speed = 0;
+int o_flag = 0;
+int st_flag = 0;
+
+int hough_threshold = 20;               ///////////////////change
+int canny_th1 = 125;
+int canny_th2 = 250;
+int roi_th = 70;
+
+int ignore_line = 0;
+
+short camXangle;
+short camYangle;
 
 //////parking//////
 int front_detect = 0;
@@ -67,7 +83,8 @@ int front_obstacle_flag = 0;
 int rear_obstacle_flag = 0;
 
 ////////traffic light//////
-int color_step = 0;
+int color_step = 0;         // regonize the traffic light
+int detect_step = 0;        // suddenly obstacle
 
 typedef enum {
     DUMP_NONE,
@@ -102,74 +119,157 @@ struct thr_data {
   * @param  data: pointer to parameter of thr_data
   * @retval none
   */
-int steering(int angle)
+int new_steering(int angle)
 {
-    int speed = 80;
+    int d_speed = 200;
+//    int t_angle = 1500 - (angle * 6.5);
+    int t_angle = 1500 - ((750 / 90^(2)) * angle^(2));
 
-    /////////////go staright///////////////
-    if (angle >= -10 && angle <= 10)
+    if (t_angle >= 2000)
     {
-        SteeringServoControl_Write(1500);
-        speed = 140;
+        t_angle = 2000;
+    }
+    else if (t_angle <= 1000)
+    {
+        t_angle = 1000;
+    }
+
+    if (t_angle >= 1400 && t_angle <= 1600)
+    {
+        speed = d_speed;            //120
     }
     /////////////turn left/////////////////
-    else if (angle >= -25 && angle <= -10)
+    else if (t_angle >= 1200 && t_angle < 1400)
     {
-        SteeringServoControl_Write(1600);
-        speed = 120;
+        speed = d_speed - 20;            //120
     }
-    else if (angle >= -40 && angle <= -25)
+    else if (t_angle >= 1000 && t_angle < 1200)
     {
-        SteeringServoControl_Write(1700);
-        speed = 120;   
-    }
-    else if (angle >= -55 && angle <= -40)
-    {
-        SteeringServoControl_Write(1800);
-        speed = 110;
-    }
-    else if (angle >= -70 && angle <= -55)
-    {
-        SteeringServoControl_Write(1900);
-        speed = 90;
-    }
-    else if (angle <= -70)
-    {
-        SteeringServoControl_Write(2000);
-        speed = 90;
+        speed = d_speed - 30;            //120
     }
     //////////////turn right/////////////
-    else if (angle >= 10 && angle <= 25)
+    else if (t_angle > 1600 && t_angle <= 1800)
     {
-        SteeringServoControl_Write(1400);
-        speed = 90;
+        speed = d_speed - 20;            //120
     }
-    else if (angle >= 25 && angle <= 40)
+    else if (t_angle > 1800 && t_angle <= 2000)
     {
-        SteeringServoControl_Write(1300);
-        speed = 120;
+        speed = d_speed - 30;            //120
     }
-    else if (angle >= 40 && angle <= 55)
+
+    SteeringServoControl_Write(t_angle);
+
+    return speed - down_speed;
+}
+
+int steering(int angle)
+{
+    int d_speed = 180;
+    int t_angle = 1500 - (angle * 6.5);
+
+    if (t_angle >= 2000)
     {
-        SteeringServoControl_Write(1200);
-        speed = 110;
+        t_angle = 2000;
     }
-    else if (angle >= 55 && angle <= 70)
+    else if (t_angle <= 1000)
     {
-        SteeringServoControl_Write(1100);
-        speed = 90;
+        t_angle = 1000;
     }
-    else if (angle >= 70)
+
+    if (angle >= -40 && angle <= 40)
     {
-        SteeringServoControl_Write(1000);
-        speed = 90;
+        /////////////go staright///////////////
+        if (angle >= -10 && angle <= 10)
+        {
+            SteeringServoControl_Write(1500);
+            speed = d_speed;            //120
+        }
+        /////////////turn left/////////////////
+        else if (angle >= -25 && angle <= -10)
+        {
+            SteeringServoControl_Write(1580);
+            speed = d_speed;            //120
+        }
+        else if (angle >= -40 && angle <= -25)
+        {
+            SteeringServoControl_Write(1660);
+            speed = d_speed - 10;            //120
+        }
+    /*    
+        else if (angle >= -59 && angle <= -45)
+        {
+            SteeringServoControl_Write(1800);
+            speed = d_speed - 10;            //110
+        }
+        else if (angle >= -70 && angle <= -59)
+        {
+            SteeringServoControl_Write(1900);
+            speed = d_speed - 20;             //90
+        }
+        else if (angle <= -70)
+        {
+            SteeringServoControl_Write(2000);
+            speed = d_speed - 30;             //90
+        }
+    */
+        //////////////turn right/////////////
+        else if (angle >= 10 && angle <= 25)
+        {
+            SteeringServoControl_Write(1420);
+            speed = d_speed;             //90
+        }    
+        else if (angle >= 25 && angle <= 40)
+        {
+            SteeringServoControl_Write(1340);
+            speed = d_speed - 10;            //120
+        }
+/*
+        else if (angle >= 45 && angle <= 59)
+        {
+            SteeringServoControl_Write(1200);
+            speed = d_speed - 10;            //110
+        }
+        else if (angle >= 59 && angle <= 70)
+        {
+            SteeringServoControl_Write(1100);
+            speed = d_speed - 20;             //90
+        }
+        else if (angle >= 70)
+        {
+            SteeringServoControl_Write(1000);
+            speed = d_speed - 30;             //90
+        }
+    */
     }
-    return speed;
+    else
+    {
+        /////////////turn left/////////////////
+        if (t_angle >= 1150 && t_angle < 1300)
+        {
+            speed = d_speed - 20;            //120
+        }
+        else if (t_angle >= 1000 && t_angle < 1150)
+        {
+            speed = d_speed - 30;            //120
+        }
+        //////////////turn right/////////////
+        else if (t_angle > 1700 && t_angle <= 1850)
+        {
+            speed = d_speed - 20;            //120
+        }
+        else if (t_angle > 1850 && t_angle <= 2000)
+        {
+            speed = d_speed - 30;            //120
+        }
+
+        SteeringServoControl_Write(t_angle);
+
+    }
+    return speed - down_speed;
 }
 
 void obstacleDetect()
 {
-    int speed;
     int distance = 1000;
 
     if (DistanceSensor(1) > distance)
@@ -181,49 +281,66 @@ void obstacleDetect()
         usleep(1000000);
         Alarm_Write(OFF);
         while (DistanceSensor(1) > distance);
-        step_cnt = 1;
+        usleep(1000000);
+        passing = 0;
+        step_cnt++;
+    }
+}
+
+void hill()
+{
+    int distance = 400;
+
+    if (DistanceSensor(1) > distance)
+    {
+        SpeedPIDProportional_Write(50);
+        SpeedPIDIntegral_Write(50);        
+        SpeedPIDDifferential_Write(50);
+
+        speed = 120;
+        DesireSpeed_Write(speed);
+
+        Alarm_Write(ON);
+        usleep(100000);
+        Alarm_Write(OFF);
+        SteeringServoControl_Write(1500);
+        while (DistanceSensor(1) > distance);
+        usleep(1000000);
+
+        while(1)
+        {
+            if (DistanceSensor(1) > distance)
+            {
+                Alarm_Write(ON);
+                usleep(100000);
+                Alarm_Write(OFF);
+                passing = 0;
+                break;
+            }
+        }
+
+        SpeedPIDProportional_Write(20);
+        SpeedPIDIntegral_Write(20);        
+        SpeedPIDDifferential_Write(20);
+        step_cnt++;
     }
 }
 
 void horizental_park()
 {
-    //IR_FF = DistanceSensor(1);
-    //IR_FR = DistanceSensor(2);
-    //IR_BB = DistanceSensor(4); 
-    //IR_BR = DistanceSensor(3);
     int BB_flag = 0;
     int break_flag = 0;
-    int speed = -60;
-    int steering_time = 200000;
+    int steering_time = 300000;
 
-    //DesireSpeed_Write(speed);
-    // Parking Start
-    //SteeringServoControl_Write(1500);
-    //DesireSpeed_Write(30);
-    //sleep(1);
-    //DesireSpeed_Write(speed);
-    //sleep(1);
-/*
-   while(1)
-    {
-        printf("first step, distance : %d\n", DistanceSensor(3));
-        if(DistanceSensor(3) < 800)
-        {
-            BB_flag++;
-            if (BB_flag >= 5)
-            {
-                break;
-            }
-        }
-        else BB_flag = 0;
-    }
-*/
+    passing = 0;
 
-    SteeringServoControl_Write(1000);
     DesireSpeed_Write(0);
+    SteeringServoControl_Write(1060);
     usleep(steering_time);
+
+    speed = -60;
     DesireSpeed_Write(speed);
-    usleep(3800000);
+    usleep(4400000);
 
     SteeringServoControl_Write(1500);
     DesireSpeed_Write(0);
@@ -232,8 +349,8 @@ void horizental_park()
 
     while(1)
     {
-        printf("second step, distance : %d\n", DistanceSensor(4));
-        if(DistanceSensor(4) > 1600)
+        //printf("second step, distance : %d\n", DistanceSensor(4));
+        if(DistanceSensor(4) > 1800)
         {
             BB_flag++;
             if (BB_flag >= 6)
@@ -245,57 +362,17 @@ void horizental_park()
     }
 
     BB_flag = 0;
-/*
-    SteeringServoControl_Write(1500);
-    DesireSpeed_Write(0);
-    sleep(1);
-    DesireSpeed_Write(speed);
-    sleep(1);
-    while(1)
-    {
-        printf("second step, distance : %d\n", DistanceSensor(4));
-        if(DistanceSensor(4) > 1500)
-        {
-            break;
-        }
-    }
-
-
-    BB_flag = 0;
-
-    SteeringServoControl_Write(1700);
-    DesireSpeed_Write(0);
-    sleep(1);
-    DesireSpeed_Write(speed);
-    sleep(1);
-    while(1)
-    {
-        printf("third step, distance : %d\n", DistanceSensor(4));
-        if(DistanceSensor(4) > 1200)
-        {
-            BB_flag++;
-            if (BB_flag == 5)
-            {
-                break;
-            }
-        }
-        else BB_flag = 0;
-    }
-    
-    BB_flag = 0;
-    */
-
-    speed = 60;
 
     SteeringServoControl_Write(1000);
     DesireSpeed_Write(0);
     usleep(steering_time);
+
+    speed = 60;
     DesireSpeed_Write(speed);
     usleep(1400000);
 
-    speed = -60;
-
     SteeringServoControl_Write(2000);
+    speed = -60;
     DesireSpeed_Write(speed);
     usleep(1500000);
 /*
@@ -306,16 +383,16 @@ void horizental_park()
 */
     while(1)
     {
-        printf("third step, distance : %d\n", DistanceSensor(4));
+        //printf("third step, distance : %d\n", DistanceSensor(4));
         if(DistanceSensor(4) > 2000 && DistanceSensor(2) > 2300)
         {
             break;
         }
-        else if (DistanceSensor(4) >= 3500)
+        else if (DistanceSensor(4) >= 3200)
         {
             break;
         }
-        else if (DistanceSensor(3) >= 4000)
+        else if (DistanceSensor(3) >= 3500)
         {
             break_flag = 1;
             break;
@@ -336,13 +413,12 @@ void horizental_park()
         }
     }
 
-    SteeringServoControl_Write(1500);
     DesireSpeed_Write(0);
-    usleep(steering_time);
 
     Alarm_Write(ON);
     usleep(1000000);
     Alarm_Write(OFF);
+    usleep(300000);
 
     speed = 60;
 
@@ -359,66 +435,68 @@ void horizental_park()
             speed = -60;
             SteeringServoControl_Write(1100);
             DesireSpeed_Write(0);
-            usleep(200000);
+            usleep(steering_time);
             DesireSpeed_Write(speed);
-            usleep(400000);
+            usleep(200000);
 
             speed = 60;
             SteeringServoControl_Write(1700);
             usleep(steering_time);
             DesireSpeed_Write(speed);
+            usleep(500000);
+
+            SteeringServoControl_Write(1500);
             usleep(800000);
             break;
         }
-        else if (DistanceSensor(4) < 200)
+        else if (DistanceSensor(4) < 750)
         {
-            SteeringServoControl_Write(1500);
+            SteeringServoControl_Write(1400);
             usleep(steering_time);
             DesireSpeed_Write(speed);
-            usleep(1300000);   
+            usleep(500000);   
             break;
         }
     }
 
     speed = 60;
-    SteeringServoControl_Write(1300);
+    SteeringServoControl_Write(1400);
     DesireSpeed_Write(speed);
     usleep(1000000);
-
-
 }
 
 void vertical_park()
 {
-    //IR_FF = DistanceSensor(1);
-    //IR_FR = DistanceSensor(2);
-    //IR_BB = DistanceSensor(4); 
-    //IR_BR = DistanceSensor(3);
-    int steering_time = 200000;
-    int speed = 60;
+    int steering_time = 300000;
 
-    DesireSpeed_Write(speed);
+    passing = 0;
+
+    //DesireSpeed_Write(speed);
+
     // Parking Start
 
-    SteeringServoControl_Write(1850);
+    SteeringServoControl_Write(1500);
     DesireSpeed_Write(0);
     usleep(steering_time);
+
+    speed = 60;
     DesireSpeed_Write(speed);
-    usleep(700000);
+    usleep(steering_time);             // 1850 / 700000
+
+    SteeringServoControl_Write(1000);
+    DesireSpeed_Write(0);
+    usleep(steering_time);
 
     speed = -60;
-
-    SteeringServoControl_Write(1140);
-    DesireSpeed_Write(0);
-    usleep(steering_time);
     DesireSpeed_Write(speed);
     sleep(1);
 
     while(1)
     {
-        printf("first step, distance : %d\n", DistanceSensor(4));
+        //printf("first step, distance : %d\n", DistanceSensor(4));
         if(DistanceSensor(3) > 1000 && DistanceSensor(5) > 1000)
         {
+            usleep(500000);
             break;
         }
     }
@@ -426,65 +504,52 @@ void vertical_park()
     SteeringServoControl_Write(1500);
     DesireSpeed_Write(0);
     usleep(steering_time);
+
     DesireSpeed_Write(speed);
     while(1)
     {
-        if (DistanceSensor(5) < DistanceSensor(3))
+        //printf("second step, distance : %d\n", DistanceSensor(4));
+        if(DistanceSensor(4) > 2700)
         {
-            SteeringServoControl_Write(1650);
-        }
-        else if (DistanceSensor(5) > DistanceSensor(3))
-        {
-            SteeringServoControl_Write(1350);
-        }
-        else
-        {
-            SteeringServoControl_Write(1500);
-        }
-
-        printf("second step, distance : %d\n", DistanceSensor(4));
-        if(DistanceSensor(4) > 3000)
-        {
-            SteeringServoControl_Write(1500);
             DesireSpeed_Write(0);
             Alarm_Write(ON);
             usleep(1000000);
             Alarm_Write(OFF);
+            usleep(300000);
             break;
         }
     }
 
     speed = 60;
-    
-
-    usleep(steering_time);
-
     DesireSpeed_Write(speed);
 
     while(1)
     {
-        printf("third step, distance : %d\n", DistanceSensor(4));
-        if(DistanceSensor(4) < 700)
+        //printf("third step, distance : %d\n", DistanceSensor(4));
+        if(DistanceSensor(4) < 800)
         {
             break;
         }
     }
 
-    SteeringServoControl_Write(1100);
+    SteeringServoControl_Write(1000);
     DesireSpeed_Write(0);
     usleep(steering_time);
+
     DesireSpeed_Write(speed);
     usleep(2000000);
 }
 
 void parking(ir_data_FR, ir_data_BR)
 {
+    int reg_distance = 550;
+
     // front IR sensor detect //
-    if(ir_data_FR >= 600)
+    if(ir_data_FR >= reg_distance)
     {
         front_detect++;
 
-        if (front_detect >= 5)
+        if (front_detect >= 3)
         {
             front_flag = 1;
         }
@@ -494,19 +559,20 @@ void parking(ir_data_FR, ir_data_BR)
         front_flag = 0;
         back_flag = 0;
         front_detect = 0;
+        back_detect = 0;
 
-        if (park_flag != 1)
+        //if (park_flag != 1)
+        //{
+        if (step_cnt == 2)
         {
-            if (step_cnt == 1)
-            {
-                step_cnt = 2;
-            }
-            else if (step_cnt == 3)
-            {
-                step_cnt = 4;
-            }
+            step_cnt = 3;
         }
-        else park_flag = 3;
+        else if (step_cnt == 4)
+        {
+            step_cnt = 5;
+        }
+        //}
+        //else park_flag = 3;
     }
     else
     {
@@ -515,17 +581,20 @@ void parking(ir_data_FR, ir_data_BR)
 
 
     // back IR sensor detect //
-    if(front_flag == 1 && ir_data_BR > 600)
+    if(front_flag == 1 && ir_data_BR > reg_distance)
     {
         back_detect++;
 
-        if (back_detect >= 3)
+        if (back_detect == 3)
         {
+            Alarm_Write(ON);
+            usleep(100000);
+            Alarm_Write(OFF);
             back_flag = 1;
         }
 
-//        if (step_cnt == 2)
-        if (ir_data_FR > 600 && park_flag != 3 && (step_cnt%2 == 0))
+//        if (step_cnt == 3)
+        if (ir_data_FR > reg_distance && park_flag != 1 && (step_cnt%2 == 1))
         {
             horizental_park();
 
@@ -534,8 +603,8 @@ void parking(ir_data_FR, ir_data_BR)
             park_flag = 1;
             step_cnt++;
         }
-//        else if (step_cnt == 4)
-        else if (park_flag != 2 && (step_cnt%2 == 0))
+//        else if (step_cnt == 5)
+        else if (park_flag != 2 && (step_cnt%2 == 1))
         {
             vertical_park();
 
@@ -544,21 +613,28 @@ void parking(ir_data_FR, ir_data_BR)
             park_flag = 2;
             step_cnt++;
         }
+
+        if (step_cnt == 6)
+        {
+            hough_threshold = 20;
+            down_speed = 10;
+        }
     }
-    else
-    {
-        back_detect = 0;
-    }
+    else back_detect = 0;
 }
 
 
 void CircleCourse(ir_data_FF, ir_data_BB)
 {
-    int speed;
     int i = 0;
     int line_cnt = 0;
     int line_sensor = 0;
     char byte = 0x80;
+
+    if (step_cnt == 6)
+    {
+        hough_threshold = 40;
+    }
 
     line_sensor = LineSensor_Read();        // black:1, white:0
     for(i=0; i<8; i++)
@@ -566,30 +642,40 @@ void CircleCourse(ir_data_FF, ir_data_BB)
         if((line_sensor & byte)) line_cnt++;
         line_sensor = line_sensor << 1;
     }
-    printf("LineSensor = %d \n", line_cnt);
+    //printf("LineSensor = %d \n", line_cnt);
 
     if (line_cnt <= 3 && line_flag == 0)
     {
-        step_cnt = 6;
+        step_cnt++;
         SteeringServoControl_Write(1500);
         speed = 0;
         DesireSpeed_Write(speed);
+
+        Alarm_Write(ON);
+        usleep(300000);
+        Alarm_Write(OFF);
+
+        //hough_threshold = 20;
+        down_speed = 40;
+ //       roi_th = 50;
         
         while(1)
         {
-            if (DistanceSensor(1) > 700)
-            {
-                step_cnt = 7;
-                printf("step_cnt : %d\n", step_cnt);
-            }
-            if (step_cnt == 7 && DistanceSensor(1) <= 400)
+            if (DistanceSensor(1) > 500)
             {
                 step_cnt = 8;
+                //printf("step_cnt : %d\n", step_cnt);
+            }
+            if (step_cnt == 8 && DistanceSensor(1) <= 300)
+            {
+                sleep(3);
+                step_cnt++;
                 line_flag = 1;
                 speed = 100;
                 DesireSpeed_Write(speed);
                 sleep(1);
-                printf("step_cnt : %d\n", step_cnt);
+                passing = 0;
+                //printf("step_cnt : %d\n", step_cnt);
                 break;
             }
         }
@@ -606,12 +692,14 @@ void CircleCourse(ir_data_FF, ir_data_BB)
     else if (ir_data_FF < 2000 && front_obstacle_flag == 1)
     {
         stop = 0;
+        front_obstacle_flag = 0;
         CarLight_Write(ALL_OFF);
+        CarLight_Write(FRONT_ON);
     }
     else if (ir_data_BB >= 2000)
     {
         stop = 1;
-        speed = 120;                //crash defense
+        speed = 200;                //crash defense
         DesireSpeed_Write(speed);
         rear_obstacle_flag = 1;
         CarLight_Write(ALL_ON);
@@ -619,7 +707,232 @@ void CircleCourse(ir_data_FF, ir_data_BB)
     else if (ir_data_BB < 3000 && rear_obstacle_flag == 1)
     {
         stop = 0;
+        rear_obstacle_flag = 0;
         CarLight_Write(ALL_OFF);
+        CarLight_Write(FRONT_ON);
+    }
+}
+
+void multilane(int mode)
+{
+    int reg_distance = 550;
+
+    if (mode == 1)
+    {
+        if (DistanceSensor(1) >= 800)
+        {
+            stop = 1;
+            SteeringServoControl_Write(1500);
+        }
+        else stop = 0;
+
+        if (DistanceSensor(1) >= 1000)
+        {
+            o_flag++;
+            if (o_flag >= 3)
+            {
+                passing = 0;
+                stop = 0;
+                Alarm_Write(ON);
+                SteeringServoControl_Write(1500);
+                CarLight_Write(REAR_ON);
+                speed = -60;
+                DesireSpeed_Write(speed);
+                usleep(1300000);
+
+                CarLight_Write(ALL_OFF);
+                Alarm_Write(OFF);
+
+                speed = 150;
+                DesireSpeed_Write(speed);
+                Winker_Write(RIGHT_ON);
+
+                SteeringServoControl_Write(1000);
+                usleep(810000);
+
+                SteeringServoControl_Write(2000);
+                usleep(900000);         //950000
+
+                SteeringServoControl_Write(1500);
+                usleep(300000);
+
+                Winker_Write(ALL_OFF);
+                step_cnt++;
+            }
+        }
+        else o_flag = 0;
+    }
+    else if (mode == 2)
+    {
+        if (DistanceSensor(5) < reg_distance && DistanceSensor(6) < reg_distance)
+        {
+            passing = 0;
+            Alarm_Write(ON);
+            CarLight_Write(REAR_ON);
+
+            SteeringServoControl_Write(1500);
+
+            speed = -60;
+            DesireSpeed_Write(speed);
+            usleep(1000000);
+
+            CarLight_Write(ALL_OFF);
+            Alarm_Write(OFF);
+
+            speed = 150;
+            DesireSpeed_Write(speed);
+            Winker_Write(LEFT_ON);
+
+            SteeringServoControl_Write(2000);
+            usleep(850000);
+
+            SteeringServoControl_Write(1000);
+            usleep(850000);
+
+            Winker_Write(ALL_OFF);            
+
+            speed = 60;
+            DesireSpeed_Write(speed);
+
+            SteeringServoControl_Write(1500);
+
+            hough_threshold = 50;
+            step_cnt++;
+        }
+    }
+}
+
+void stopline()
+{
+    int line_sensor = 0;
+    char byte = 0x80;
+    int line_cnt = 0;
+    int i = 0;
+
+    line_sensor = LineSensor_Read();        // black:1, white:0
+    for(i=0; i<8; i++)
+    {
+        if((line_sensor & byte)) line_cnt++;
+        line_sensor = line_sensor << 1;
+    }
+    printf("LineSensor = %d \n", line_cnt);
+
+    if (line_cnt <= 3)
+    {
+        CarLight_Write(ALL_ON);
+        steering_stop = 1;
+        stop = 1;
+        DesireSpeed_Write(0);
+        SteeringServoControl_Write(1500);
+        step_cnt++;
+        canny_th1 = 500;
+        canny_th2 = 600;
+        roi_th = 70;
+        hough_threshold = 50;
+    }
+}
+
+void detect_cnt(int mode)
+{
+    short camYangle;
+
+
+    if (mode == 1)
+    {
+        if (detect_step >= 3)
+        {
+            SteeringServoControl_Write(1500);
+            DesireSpeed_Write(0);
+
+            Alarm_Write(ON);
+            usleep(1000000);
+            Alarm_Write(OFF);
+            
+            speed = 50;
+            DesireSpeed_Write(speed);
+            while (DistanceSensor(1) < 2500);
+            DesireSpeed_Write(0);
+
+            while (DistanceSensor(1) > 1500);
+            usleep(500000);
+            
+            passing = 0;
+            step_cnt++;
+        }
+    }
+    else if (mode == 2)
+    {
+        if (color_step == 21)
+        {
+            camYangle = 1800;      //max down value
+            CameraXServoControl_Write(camYangle);
+            
+            speed = 60;
+            DesireSpeed_Write(speed);
+            
+            SteeringServoControl_Write(1500);
+            usleep(1500000);
+            SteeringServoControl_Write(2000);
+            usleep(1600000);
+
+            //printf("left turn!!!!!!!\n");
+            passing = 0;
+            ignore_line = 1;
+            steering_stop = 0;
+            step_cnt++;
+        }
+        else if (color_step == 22)
+        {
+            camYangle = 1800;      //max down value
+            CameraXServoControl_Write(camYangle);
+
+            speed = 60;
+            DesireSpeed_Write(speed);
+
+            SteeringServoControl_Write(1500);
+            usleep(1500000);
+            SteeringServoControl_Write(1000);
+            usleep(1600000);
+
+            //printf("right turn!!!!!!\n");
+            passing = 0;
+            ignore_line = 2;
+            steering_stop = 0;
+            step_cnt++;
+        }
+    }
+    printf("color_step : %d\n",color_step);
+}
+
+void endline()
+{
+    int line_sensor = 0;
+    char byte = 0x80;
+    int line_cnt = 0;
+    int i = 0;
+
+    line_sensor = LineSensor_Read();        // black:1, white:0
+    for(i=0; i<8; i++)
+    {
+        if((line_sensor & byte)) line_cnt++;
+        line_sensor = line_sensor << 1;
+    }
+    printf("LineSensor = %d \n", line_cnt);
+
+    if (line_cnt <= 3)
+    {
+        stop = 1;
+        SteeringServoControl_Write(1500);
+        usleep(1700000);
+        DesireSpeed_Write(0);
+        
+        Alarm_Write(ON);
+        usleep(1000000);
+        Alarm_Write(OFF);
+        
+        st_flag = 1;
+        steering_stop = 1;
+        step_cnt++;
     }
 }
 
@@ -697,6 +1010,7 @@ static void draw_operatingtime(struct display *disp, uint32_t time)
                  cambuf: vpe output buffer that converted capture image
   * @retval none
   */
+
 static int hough_transform(struct display *disp, struct buffer *cambuf)
 {
     unsigned char srcbuf[VPE_OUTPUT_W*VPE_OUTPUT_H*3];
@@ -709,11 +1023,49 @@ static int hough_transform(struct display *disp, struct buffer *cambuf)
 
         gettimeofday(&st, NULL);
 
-        af_angle = OpenCV_hough_transform(srcbuf, VPE_OUTPUT_W, VPE_OUTPUT_H, cam_pbuf[0], VPE_OUTPUT_W, VPE_OUTPUT_H, be_angle);
+        af_angle = OpenCV_hough_transform(srcbuf, VPE_OUTPUT_W, VPE_OUTPUT_H, cam_pbuf[0], VPE_OUTPUT_W, VPE_OUTPUT_H, be_angle, hough_threshold, canny_th1, canny_th2, roi_th, ignore_line);
         
         if (af_angle != 0.0)
         {
             be_angle = af_angle;
+
+/*
+            if (ignore_line == 1 && st_flag == 0)
+            {
+                camXangle = 1550;
+                CameraYServoControl_Write(camXangle);
+                if (be_angle >= -10)
+                {
+                    steering_stop = 1;
+                    SteeringServoControl_Write(1600);
+                    usleep(300000);
+                    SteeringServoControl_Write(1500);
+                }
+                else be_angle += 5;
+            }
+            else if (ignore_line == 2 && st_flag == 0)
+            {   
+                camXangle = 1450;
+                CameraYServoControl_Write(camXangle);
+                if (be_angle <= 10)
+                {
+                    steering_stop = 1;
+                    SteeringServoControl_Write(1400);
+                    usleep(300000);
+                    SteeringServoControl_Write(1500);
+                }
+                else be_angle -= 5;
+            }
+*/
+
+            if (ignore_line == 1)
+            {
+                be_angle -= 15; 
+            }
+            else if (ignore_line == 2)
+            {
+                be_angle += 15;
+            }
         }
 
         gettimeofday(&et, NULL);
@@ -722,9 +1074,25 @@ static int hough_transform(struct display *disp, struct buffer *cambuf)
 
         return be_angle;
     }
+
+    return be_angle;
 }
 
-static int traffic_light(struct display *disp, struct buffer *cambuf)
+static void suddenly_obstacle(struct display *disp, struct buffer *cambuf)
+{
+    unsigned char srcbuf[VPE_OUTPUT_W*VPE_OUTPUT_H*3];
+
+    unsigned char* cam_pbuf[4];
+    if(get_framebuf(cambuf, cam_pbuf) == 0)
+    {
+        memcpy(srcbuf, cam_pbuf[0], VPE_OUTPUT_W*VPE_OUTPUT_H*3);
+
+        detect_step = opencv_obstacle(srcbuf, VPE_OUTPUT_W, VPE_OUTPUT_H, cam_pbuf[0], VPE_OUTPUT_W, VPE_OUTPUT_H, detect_step);
+        detect_cnt(1);
+    }
+}
+
+static void traffic_light(struct display *disp, struct buffer *cambuf)
 {
     unsigned char srcbuf[VPE_OUTPUT_W*VPE_OUTPUT_H*3];
     uint32_t optime;
@@ -738,6 +1106,7 @@ static int traffic_light(struct display *disp, struct buffer *cambuf)
         gettimeofday(&st, NULL);
 
         color_step = colordetect(srcbuf, VPE_OUTPUT_W, VPE_OUTPUT_H, cam_pbuf[0], VPE_OUTPUT_W, VPE_OUTPUT_H, color_step);
+        detect_cnt(2);
 
         gettimeofday(&et, NULL);
         optime = ((et.tv_sec - st.tv_sec)*1000)+ ((int)et.tv_usec/1000 - (int)st.tv_usec/1000);
@@ -758,32 +1127,24 @@ void * capture_thread(void *arg)
     struct buffer *capt;
     bool isFirst = true;
     int index;
-    int count = 0;
     int i;
-    int ir_data;
     int ir_data_FF;
     int ir_data_FR;
     int ir_data_BB;
     int ir_data_BR;
-    int now_dist;
-    int prev_dist;
-    int diff_dist;
-    unsigned char status;
-    short speed;
     int steering_angle;
     unsigned char gain;
-    short camYangle;
-    int target_speed;
-    int tag = 0;
-
+    int target_speed = 0;
 
     CarControlInit();
+//    CarLight_Write(FRONT_ON);
 
     //camera y servo set
     //camYangle = CameraYServoControl_Read();
     //printf("CameraYServoControl_Read() = %d\n", camYangle);    //default = 1500, 0x5dc
-
+    camXangle = 1500;
     camYangle = 1500;
+    CameraYServoControl_Write(camXangle);
     CameraYServoControl_Write(camYangle);
     sleep(1);
 
@@ -856,167 +1217,10 @@ void * capture_thread(void *arg)
     //speed set    
     //speed = DesireSpeed_Read();
     //printf("DesireSpeed_Read() = %d \n", speed);
-    speed = 80;
     DesireSpeed_Write(speed);
 
-    prev_dist = 0;
     while(1) 
     {
-        ir_data_FF = DistanceSensor(1);
-        ir_data_FR = DistanceSensor(2);
-        ir_data_BR = DistanceSensor(3);
-        ir_data_BB = DistanceSensor(4);
-
-        //----------------------------------------------------------------------------------------------------------------------
-
-        if (DistanceSensor(5) > 4000)           //stop!!
-        {
-            speed = 0;
-            DesireSpeed_Write(speed);
-            stop = 1;
-        }
-
-        //----------------------------------------------------obstacle detect(0)------------------------------------------------
-        
-        if (step_cnt == 0)
-        {
-            obstacleDetect(ir_data_FF);
-        }
-
-        //----------------------------------------------------Parking course(1)----------------------------------------------------
-        
-        if (step_cnt >= 1 && step_cnt < 5)
-        {
-            parking(ir_data_FR, ir_data_BR);
-        }
-
-
-        //----------------------------------------------------Circle course(5)----------------------------------------------------
-
-        if (step_cnt >= 5 && step_cnt <= 8)
-        {
-            CircleCourse(ir_data_FF, ir_data_BB);
-        }
-
-        //----------------------------------------------------Tunnel course----------------------------------------------------
-
-
-        //----------------------------------------------------three-lane load----------------------------------------------------
-
-
-        //----------------------------------------------------traffic light----------------------------------------------------
-
-        // stop line detect with ir sensor code
-        // make function
-        
-        if (step_cnt == 10)
-        {
-            printf("step : %d\n", color_step);
-            camYangle = 1500;      //max down value
-            CameraXServoControl_Write(camYangle);
-            traffic_light(vpe->disp, capt);
-
-            if (color_step == 31)
-            {
-                SteeringServoControl_Write(1800);
-                DesireSpeed_Write(0);
-                usleep(200000);
-                printf("left turn!!!!!!!\n");
-                step_cnt++;
-            }
-            else if (color_step == 32)
-            {
-                SteeringServoControl_Write(1200);
-                DesireSpeed_Write(0);
-                usleep(200000);
-                printf("right turn!!!!!!\n");
-                step_cnt++;
-            }
-        }
-
-        //------------------------------------------------------End course---------------------------------------------------------
-
-/*
-        now_dist = ir_data_BR;
-
-        diff_dist = prev_dist - now_dist;
-        if(diff_dist > 1000 && now_dist > 1000)
-        {
-            printf("Parking Area Detection");
-            //printf("IR_FR : %d,\t IR_BR: %d", ir_data_FR, ir_data_BR);
-
-            speed = 50;
-            DesireSpeed_Write(speed);
-            // Parking Start
-            SteeringServoControl_Write(1600);
-            DesireEncoderCount_Write(-1000);  
-                
-            if(EncoderCounter_Read() <= 0)
-            {
-                SteeringServoControl_Write(1500);
-            }
-
-            DesireEncoderCount_Write(-1000);
-
-        }
-        prev_dist = ir_data_BR;
-*/
-        //printf("FrontR : %d,\t BackR : %d,\t f_flag : %d,\t b_flag : %d,\t step_cnt : %d\n", ir_data_FR, ir_data_BR, front_flag, back_flag, step_cnt);
-        //printf("Front : %d,\t Back : %d\n", ir_data_FF, ir_data_BB);
-        
-        
-//        if(ir_data_FR )
-
-
-        /*
-        if (DistanceSensor(2) > 1000)
-        {
-            
-
-            printf("IR_FR : %d,\t IR_BR: %d", ir_data_FR, ir_data_BR);
-            tag = 1;
-		    // Parking Space Detection
-            while(1)
-            {
-                if(DistanceSensor(3) > 1000 && tag == 1)
-                {
-                    tag = 0;
-                    speed = 50;
-                    DesireSpeed_Write(speed);
-                    // Parking Start
-                    SteeringServoControl_Write(1600);
-                    DesireEncoderCount_Write(-1000);  
-                        
-                    if(EncoderCounter_Read() == 0)
-                    {
-                        SteeringServoControl_Write(1400);
-                    }
-
-                    //sleep(1000);
-                    
-                    DesireEncoderCount_Write(-10000);  
-                    //while(EncoderCounter_Read() > -100);
-
-                    if(EncoderCounter_Read() == 0)
-                    {
-                        break;
-                    }
-                }
-            }
-            */
-            /*
-		    // Parking Start
-	    	SteeringServoControl_Write(1600);
-	    	DesireEncoderCount_Write(-10000);    
-
-		    //sleep(1000);
-		    SteeringServoControl_Write(1500);
-		    DesireEncoderCount_Write(-20000);
-
-            tag = 1;
-            */
-        
-        
         index = v4l2_dqbuf(v4l2, &vpe->field);
         vpe_input_qbuf(vpe, index);
 
@@ -1030,16 +1234,141 @@ void * capture_thread(void *arg)
         index = vpe_output_dqbuf(vpe);
         capt = vpe->disp_bufs[index];
 
+        ir_data_FF = DistanceSensor(1);
+        ir_data_FR = DistanceSensor(2);
+        ir_data_BR = DistanceSensor(3);
+        ir_data_BB = DistanceSensor(4);
 
-////////////////////////////////////////////////////////////////////////////
-        steering_angle = hough_transform(vpe->disp, capt);
-        target_speed = steering(steering_angle);
+        //printf("step_cnt : %d\n", step_cnt);
 
-        if (stop != 1)
+        //----------------------------------------------------obstacle detect(0)------------------------------------------------
+        
+        if (step_cnt == 1)
         {
-            DesireSpeed_Write(target_speed);
+            //obstacleDetect(ir_data_FF);
+            suddenly_obstacle(vpe->disp, capt);
         }
-/////////////////////////////////////////////////////////////////////////////
+
+/*
+        if (step_cnt == 1)
+        {
+            hill();
+        }
+*/
+        //----------------------------------------------------Parking course(1)----------------------------------------------------
+        
+        if (step_cnt >= 2 && step_cnt < 6)
+        {
+            parking(ir_data_FR, ir_data_BR);
+        }
+
+
+        //----------------------------------------------------Circle course(5)----------------------------------------------------
+
+        if (step_cnt >= 6 && step_cnt <= 9)
+        {
+            CircleCourse(ir_data_FF, ir_data_BB);
+        }
+
+        //----------------------------------------------------Tunnel course----------------------------------------------------
+
+        if (step_cnt >= 9 && step_cnt <= 10)
+        {
+            if (DistanceSensor(2) >= 1000 && DistanceSensor(6) >= 1000 && DistanceSensor(3) >= 1000 && DistanceSensor(5) >= 1000 && step_cnt == 9)
+            {
+                roi_th = 70;
+                hough_threshold = 20;
+                //down_speed = 80;
+                step_cnt++;
+
+                Alarm_Write(ON);
+                usleep(100000);
+                Alarm_Write(OFF);
+                CarLight_Write(ALL_ON);
+            }
+            else if (DistanceSensor(3) < 1000 && DistanceSensor(5) < 1000 && step_cnt == 10)
+            {
+                step_cnt++;
+
+                Alarm_Write(ON);
+                usleep(100000);
+                Alarm_Write(OFF);
+                CarLight_Write(ALL_OFF);
+            }
+        }
+
+        //----------------------------------------------------three-lane load----------------------------------------------------
+
+        if (step_cnt == 11)
+        {
+            multilane(1);
+        }
+
+        if (step_cnt == 12)
+        {
+            multilane(2);
+        }
+
+        //----------------------------------------------------traffic light----------------------------------------------------
+
+        if (step_cnt == 13)
+        {
+            stopline();
+        }
+
+        // stop line detect with ir sensor code
+        // make function
+        
+        if (step_cnt == 14)
+        {
+            stop = 1;
+            camYangle = 1500;      //raise the camera angle
+            CameraXServoControl_Write(camYangle);
+            step_cnt++;
+        }
+
+        if (step_cnt == 15)
+        {
+            traffic_light(vpe->disp, capt);
+        }
+
+        //------------------------------------------------------End course---------------------------------------------------------
+
+        if (step_cnt == 16)
+        {
+            endline();              // need hough threshold up
+        }
+
+        //----------------------------------------------------temporature stop-----------------------------------------------------
+
+        if (DistanceSensor(5) > 4000 && DistanceSensor(4) > 4000)           //stop!!
+        {
+            speed = 0;
+            DesireSpeed_Write(speed);
+            stop = 1;
+            step_cnt = 999;
+        }
+
+        //------------------------------------------------------steering & speed---------------------------------------------------------
+
+        if (passing >= 10)       //remove the buffer
+        {
+            steering_angle = hough_transform(vpe->disp, capt);
+
+            if (steering_stop != 1)
+            {
+                target_speed = steering(steering_angle);
+                //target_speed = new_steering(steering_angle);
+            }
+
+            if (stop != 1)
+            {
+                DesireSpeed_Write(target_speed);
+            }
+        }
+        else passing++;
+
+        //----------------------------------------------------------------------------------------------------------------------
 
 
         if (disp_post_vid_buffer(vpe->disp, capt, 0, 0, vpe->dst.width, vpe->dst.height)) {
@@ -1212,8 +1541,6 @@ void signal_handler(int sig)
         disp_close(pexam_data->vpe->disp);
         vpe_close(pexam_data->vpe);
         v4l2_close(pexam_data->v4l2);
-
-        printf("-- 6_camera_opencv_disp example End --\n");
     }
 }
 
@@ -1225,8 +1552,6 @@ int main(int argc, char **argv)
     int disp_argc = 3;
     char* disp_argv[] = {"dummy", "-s", "4:480x272", "\0"}; // ���� ���� ���� Ȯ�� �� ó��..
     int ret = 0;
-
-    printf("-- 6_camera_opencv_disp example Start --\n");
 
     tdata.dump_state = DUMP_NONE;
     memset(tdata.dump_img_data, 0, sizeof(tdata.dump_img_data));
